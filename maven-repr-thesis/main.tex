@@ -1,1 +1,91 @@
+\PassOptionsToPackage{table, dvipsnames, svgnames}{xcolor}
+%\PassOptionsToPackage{hidelinks, colorlinks=false}{hyperref}
 
+\newcommand{\pointsize}{11pt}
+\documentclass[11pt]{extbook}
+
+\input{code_preamble}
+%\input{interleaving/preamble}
+%\input{lifelong/preamble}
+
+%\pgfplotsset{compat=1.18}
+\begin{document}
+
+   \frontmatter
+
+   \pagestyle{prelim}
+   
+   % Redefine plain page style so that the first pages of chapters
+   % have desired page style.
+   %
+
+   \input{TitlePage.tex}
+   \newpage
+
+	 \thispagestyle{empty}
+	 \begin{titlepage}
+	 \vspace*{50em}
+	 \begin{center}
+		 \copyright \ Marcin A.\ Wroblewski, 2026.  All rights reserved.
+	 \end{center}
+	 \end{titlepage}
+	 \newpage
+	 \stepcounter{page}
+	
+	 %%% (optional) dedication page
+	 \thispagestyle{plain}
+	 \vspace*{20em}
+	 \begin{center}
+	   To the collaborations that might have been, had circumstances allowed; to the labs that showed what was possible; and to my family and friends.
+	 \end{center}
+	 \newpage
+
+
+  \doublespacing
+   
+   \tableofcontents
+   \newpage
+   \listoffigures
+   \newpage
+   \listoftables
+   \newpage
+   
+   \input{Abstract.tex}
+   \newpage
+
+   
+   %\section*{\centering\textsc{\Large{\textmd{Acknowledgements}}}}
+  % \input{Acknowledgments.tex}
+   
+   \mainmatter
+   
+   \pagestyle{maintext}
+
+   \chapter{Introduction and Background}
+   \input{Introduction.tex}
+
+   \chapter[Related Work]{Related Work}
+   \label{ch:related}
+   \input{Literature_Review.tex}
+
+   \chapter[Methodology]{Methodology}
+   \label{ch:imprecision-chapter}
+   \input{Methodology.tex}
+
+   \chapter[Evaluation]{Evaluation}
+   \label{ch:lifelong}
+   %\input{Evaluation.tex}
+
+   \chapter[Conclusion]{Conclusion}
+    \label{ch:conclusion}
+    %\input{conclusion}
+
+    % \appendix
+
+       
+
+\backmatter
+\bibliographystyle{plainnat}
+\bibliography{main}
+
+\end{document}
