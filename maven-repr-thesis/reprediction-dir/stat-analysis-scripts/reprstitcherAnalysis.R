@@ -212,6 +212,28 @@ model_log_versioned_count <- fit_and_plot(
   title_label = "Quartic quasibinomial GLM: Log versioned dependency count"
 )
 
+# Companion plot: excludes the single leftmost point (smallest log versioned
+# count). With n=50, one extreme point can disproportionately pull a quartic
+# fit upward or downward near that edge. This checks whether the fitted
+# curve's shape near the left edge depends on that one observation.
+log_versioned_x <- log(maven_data$proj_vers)
+leftmost_x <- min(log_versioned_x)
+cat("\n[Trimmed variant: Log versioned dependency count]\n")
+cat("Excluding leftmost point(s) at x =", leftmost_x,
+    "(raw versioned count =", maven_data$proj_vers[which.min(log_versioned_x)], ")\n")
+cat("Corresponding y (reproducibility) value(s):",
+    maven_data$gt_repr[log_versioned_x == leftmost_x], "\n")
+
+keep_log_versioned <- log_versioned_x != leftmost_x
+model_log_versioned_count_trimmed <- fit_and_plot(
+  x_vals  = log_versioned_x[keep_log_versioned],
+  y_vals  = maven_data$gt_repr[keep_log_versioned],
+  degree  = 4,
+  x_label = "Log of versioned dependency count (project-wide)",
+  title_label = paste0("Quartic quasibinomial GLM: Log versioned dependency count ",
+                        "(leftmost point excluded, n=", sum(keep_log_versioned), ")")
+)
+
 # --- 3.3 Commit age ---
 # Predictor: time elapsed since the failing commit was created
 # Note: 'age' in the data is stored as a negative number of days
