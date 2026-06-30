@@ -129,6 +129,31 @@ fit_and_plot <- function(x_vals, y_vals, degree, x_label, title_label) {
   return(model)
 }
 
+# Companion helper: same as fit_and_plot, but excludes observations at the
+# extremes (x == 0 or x == 1) before fitting. Intended for rate/proportion
+# variables (e.g. versioning rate), where many projects pile up at the
+# extremes (0% or 100% versioned) and may be disproportionately influencing
+# the fitted curve. Labeled clearly in the plot title and a console message.
+fit_and_plot_trimmed <- function(x_vals, y_vals, degree, x_label, title_label) {
+  n_total <- length(x_vals)
+  keep <- (x_vals != 0) & (x_vals != 1)
+  n_excluded <- n_total - sum(keep)
+
+  cat("\n[Trimmed variant of:", title_label, "]\n")
+  cat("Excluding", n_excluded, "of", n_total,
+      "observations at the extremes (x = 0 or x = 1)\n")
+
+  trimmed_title <- paste0(title_label, " (extremes excluded, n=", sum(keep), ")")
+
+  fit_and_plot(
+    x_vals  = x_vals[keep],
+    y_vals  = y_vals[keep],
+    degree  = degree,
+    x_label = x_label,
+    title_label = trimmed_title
+  )
+}
+
 # --- 3.1 Project-wide dependency versioning rate ---
 # Predictor: proportion of all dependencies across all POM files
 # in the project that have an explicit version attribute
@@ -143,9 +168,30 @@ model_versioning_rate <- fit_and_plot(
   title_label = "Quartic quasibinomial GLM: Project-wide versioning rate"
 )
 
+# Companion plot: same model, excluding projects at the extremes (0% or
+# 100% versioned). Many projects cluster at these extremes, and this
+# trimmed view checks whether the hump-shaped relationship still holds
+# among projects with genuinely intermediate versioning practices.
+model_versioning_rate_trimmed <- fit_and_plot_trimmed(
+  x_vals  = maven_data$proj_vers / maven_data$deps_proj_total,
+  y_vals  = maven_data$gt_repr,
+  degree  = 4,
+  x_label = "Project-wide dependency versioning rate",
+  title_label = "Quartic quasibinomial GLM: Project-wide versioning rate"
+)
+
 # Alternative fit with degree 6 — for comparison
 # (Higher degree captures more curvature but risks overfitting at n=50)
 model_versioning_rate_deg6 <- fit_and_plot(
+  x_vals  = maven_data$proj_vers / maven_data$deps_proj_total,
+  y_vals  = maven_data$gt_repr,
+  degree  = 6,
+  x_label = "Project-wide dependency versioning rate",
+  title_label = "Degree-6 quasibinomial GLM: Project-wide versioning rate (alternative)"
+)
+
+# Companion plot: degree-6 model, extremes excluded
+model_versioning_rate_deg6_trimmed <- fit_and_plot_trimmed(
   x_vals  = maven_data$proj_vers / maven_data$deps_proj_total,
   y_vals  = maven_data$gt_repr,
   degree  = 6,
@@ -211,6 +257,16 @@ model_log_pom_count <- fit_and_plot(
 # Polynomial degree: 4
 
 model_parent_versioning_rate <- fit_and_plot(
+  x_vals  = parent_pom_with_deps$parent_vers / parent_pom_with_deps$deps_parent_total,
+  y_vals  = parent_pom_with_deps$gt_repr,
+  degree  = 4,
+  x_label = "Parent POM dependency versioning rate",
+  title_label = "Quartic quasibinomial GLM: Parent POM versioning rate"
+)
+
+# Companion plot: same model, excluding projects at the extremes (0% or
+# 100% of parent POM dependencies versioned)
+model_parent_versioning_rate_trimmed <- fit_and_plot_trimmed(
   x_vals  = parent_pom_with_deps$parent_vers / parent_pom_with_deps$deps_parent_total,
   y_vals  = parent_pom_with_deps$gt_repr,
   degree  = 4,
