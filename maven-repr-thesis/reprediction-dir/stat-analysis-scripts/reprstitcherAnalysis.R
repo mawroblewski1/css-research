@@ -310,11 +310,101 @@ model_parent_versioned_count <- fit_and_plot(
   title_label = "Quartic quasibinomial GLM: Parent POM versioned count (sqrt)"
 )
 
+# --- 3.7 Log of total project-wide dependency count ---
+# Predictor: total number of dependencies declared across all POM files,
+# including duplicates across modules, regardless of whether they are versioned.
+# This tests whether the sheer scale of a project's dependency footprint
+# predicts reproducibility, independent of versioning practice.
+# Transformation: log (to reduce right skew)
+# Polynomial degree: 4
+
+model_log_total_deps <- fit_and_plot(
+  x_vals  = log(maven_data$deps_proj_total),
+  y_vals  = maven_data$gt_repr,
+  degree  = 4,
+  x_label = "Log of total dependency count (project-wide, including duplicates)",
+  title_label = "Quartic quasibinomial GLM: Log total dependency count"
+)
+
+# Companion plot: exclude the leftmost point (smallest total dependency count),
+# as a single extreme point may disproportionately influence the quartic fit.
+log_total_x <- log(maven_data$deps_proj_total)
+leftmost_total_x <- min(log_total_x)
+cat("\n[Trimmed variant: Log total dependency count]\n")
+cat("Excluding leftmost point(s) at x =", leftmost_total_x,
+    "(raw total count =", maven_data$deps_proj_total[which.min(log_total_x)], ")\n")
+cat("Corresponding y (reproducibility) value(s):",
+    maven_data$gt_repr[log_total_x == leftmost_total_x], "\n")
+
+keep_log_total <- log_total_x != leftmost_total_x
+model_log_total_deps_trimmed <- fit_and_plot(
+  x_vals      = log_total_x[keep_log_total],
+  y_vals      = maven_data$gt_repr[keep_log_total],
+  degree      = 4,
+  x_label     = "Log of total dependency count (project-wide, including duplicates)",
+  title_label = paste0("Quartic quasibinomial GLM: Log total dependency count ",
+                       "(leftmost point excluded, n=", sum(keep_log_total), ")")
+)
+
 # =============================================================================
 # SECTION 4: EXPLORATORY 3D PLOTS
 # =============================================================================
-# These were used during exploratory analysis to look for multivariate patterns.
-# They are not intended as thesis figures.
+# The heuristic for these plots:
+#   X axis — structural vulnerability: how exposed is the project to other
+#             programmers' changes? (versioning rate or dependency count)
+#   Y axis — time: the medium through which collective effects accumulate.
+#             Other programmers update libraries over time; longer elapsed
+#             time means more opportunity for the ecosystem to shift.
+#   Z axis — reproducibility: the observable outcome.
+#
+# If the collective effect is real, projects with higher structural
+# vulnerability should show steeper reproducibility decline with age
+# than low-vulnerability projects. A flat surface along the age axis
+# is consistent with the 1D age finding (no significant effect in 40 days).
+#
+# Note: rgl renders interactive 3D windows. Use rgl::snapshot3d() to
+# capture static images for the thesis from a good viewing angle.
+#
+# The fitted surfaces use a 2D quasibinomial GLM with degree-2 polynomial
+# terms and their interaction. With n=50 this is statistically fragile;
+# treat the surfaces as illustrative rather than confirmatory.
+
+# Helper: fit and render a 3D scatter + fitted surface
+fit_and_plot_3d <- function(x_vals, y_vals, z_vals,
+                             xlab, ylab, zlab, title_label) {
+
+  cat("\n--- 3D plot:", title_label, "---\n")
+
+  df3d <- data.frame(x = x_vals, y = y_vals, z = z_vals)
+
+  # Fit a 2D quasibinomial GLM with polynomial terms and interaction
+  model_3d <- glm(z ~ poly(x, 2) * poly(y, 2), data = df3d, family = quasibinomial)
+  cat("Model summary:\n")
+  print(summary(model_3d))
+
+  # Scatter of raw data points
+  open3d()
+  title3d(main = title_label, cex = 0.9)
+  plot3d(x_vals, y_vals, z_vals,
+         xlab = xlab, ylab = ylab, zlab = zlab,
+         col = "black", size = 5, alpha = 0.7)
+
+  # Generate a grid over the x-y plane and predict the surface
+  x_grid <- seq(min(x_vals), max(x_vals), length.out = 40)
+  y_grid <- seq(min(y_vals), max(y_vals), length.out = 40)
+  grid_df <- expand.grid(x = x_grid, y = y_grid)
+  grid_df$z_pred <- predict(model_3d, newdata = grid_df, type = "response")
+
+  z_matrix <- matrix(grid_df$z_pred, nrow = 40, ncol = 40)
+
+  # Render the fitted surface in semi-transparent blue
+  surface3d(x_grid, y_grid, z_matrix,
+            col = "blue", alpha = 0.4, back = "lines")
+
+  return(model_3d)
+}
+
+# --- 4.1 Existing plots (from original exploratory analysis) ---
 
 # Project-wide versioning rate vs. log total dependency count vs. reproducibility
 plot3d(
@@ -342,6 +432,48 @@ plot3d(
   maven_data$gt_repr,
   xlab = "Log versioned deps", ylab = "Log total deps", zlab = "Reproducibility",
   col = "blue", size = 5
+)
+
+# --- 4.2 New plots: structural vulnerability × time × reproducibility ---
+
+# Project-wide versioning rate × commit age × reproducibility
+# Heuristic: versioning rate captures structural exposure to ecosystem churn;
+# age captures the time over which that churn accumulates.
+model_3d_prvrate_age <- fit_and_plot_3d(
+  x_vals = maven_data$proj_vers / maven_data$deps_proj_total,
+  y_vals = -maven_data$age,  # positive days elapsed
+  z_vals = maven_data$gt_repr,
+  xlab   = "Project-wide versioning rate",
+  ylab   = "Days since failing commit",
+  zlab   = "Reproducibility",
+  title_label = "Versioning rate x Commit age x Reproducibility"
+)
+
+# Log total dependency count × commit age × reproducibility
+# Heuristic: total dependency count captures structural exposure via footprint
+# size (more dependencies = more surfaces for ecosystem churn to affect);
+# age captures the time dimension.
+model_3d_totaldeps_age <- fit_and_plot_3d(
+  x_vals = log(maven_data$deps_proj_total),
+  y_vals = -maven_data$age,
+  z_vals = maven_data$gt_repr,
+  xlab   = "Log total dependency count (project-wide)",
+  ylab   = "Days since failing commit",
+  zlab   = "Reproducibility",
+  title_label = "Log total dependency count x Commit age x Reproducibility"
+)
+
+# Log versioned dependency count × commit age × reproducibility
+# A middle ground between the two above: captures both how many dependencies
+# are explicitly pinned and the time dimension.
+model_3d_versioned_age <- fit_and_plot_3d(
+  x_vals = log(maven_data$proj_vers),
+  y_vals = -maven_data$age,
+  z_vals = maven_data$gt_repr,
+  xlab   = "Log versioned dependency count (project-wide)",
+  ylab   = "Days since failing commit",
+  zlab   = "Reproducibility",
+  title_label = "Log versioned dependency count x Commit age x Reproducibility"
 )
 
 # =============================================================================
