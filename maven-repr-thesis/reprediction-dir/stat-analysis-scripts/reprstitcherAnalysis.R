@@ -11,6 +11,9 @@
 library(ggplot2)  # 2D plotting
 library(rgl)      # 3D plotting (used in exploratory section at bottom)
 
+# Ensure rgl opens actual windows rather than null device
+options(rgl.useNULL = FALSE)
+
 # =============================================================================
 # SECTION 1: DATA LOADING AND FILTERING
 # =============================================================================
@@ -370,6 +373,8 @@ model_log_total_deps_trimmed <- fit_and_plot(
 # treat the surfaces as illustrative rather than confirmatory.
 
 # Helper: fit and render a 3D scatter + fitted surface
+# Note: call open3d() BEFORE calling this function to ensure the window
+# is created at the top level, which is more reliable across platforms.
 fit_and_plot_3d <- function(x_vals, y_vals, z_vals,
                              xlab, ylab, zlab, title_label) {
 
@@ -382,12 +387,11 @@ fit_and_plot_3d <- function(x_vals, y_vals, z_vals,
   cat("Model summary:\n")
   print(summary(model_3d))
 
-  # Scatter of raw data points
-  open3d()
-  title3d(main = title_label, cex = 0.9)
+  # Scatter of raw data points (into already-open rgl window)
   plot3d(x_vals, y_vals, z_vals,
          xlab = xlab, ylab = ylab, zlab = zlab,
          col = "black", size = 5, alpha = 0.7)
+  title3d(main = title_label, cex = 0.9)
 
   # Generate a grid over the x-y plane and predict the surface
   x_grid <- seq(min(x_vals), max(x_vals), length.out = 40)
@@ -437,11 +441,10 @@ plot3d(
 # --- 4.2 New plots: structural vulnerability × time × reproducibility ---
 
 # Project-wide versioning rate × commit age × reproducibility
-# Heuristic: versioning rate captures structural exposure to ecosystem churn;
-# age captures the time over which that churn accumulates.
+open3d()
 model_3d_prvrate_age <- fit_and_plot_3d(
   x_vals = maven_data$proj_vers / maven_data$deps_proj_total,
-  y_vals = -maven_data$age,  # positive days elapsed
+  y_vals = -maven_data$age,
   z_vals = maven_data$gt_repr,
   xlab   = "Project-wide versioning rate",
   ylab   = "Days since failing commit",
@@ -450,9 +453,7 @@ model_3d_prvrate_age <- fit_and_plot_3d(
 )
 
 # Log total dependency count × commit age × reproducibility
-# Heuristic: total dependency count captures structural exposure via footprint
-# size (more dependencies = more surfaces for ecosystem churn to affect);
-# age captures the time dimension.
+open3d()
 model_3d_totaldeps_age <- fit_and_plot_3d(
   x_vals = log(maven_data$deps_proj_total),
   y_vals = -maven_data$age,
@@ -464,8 +465,7 @@ model_3d_totaldeps_age <- fit_and_plot_3d(
 )
 
 # Log versioned dependency count × commit age × reproducibility
-# A middle ground between the two above: captures both how many dependencies
-# are explicitly pinned and the time dimension.
+open3d()
 model_3d_versioned_age <- fit_and_plot_3d(
   x_vals = log(maven_data$proj_vers),
   y_vals = -maven_data$age,
