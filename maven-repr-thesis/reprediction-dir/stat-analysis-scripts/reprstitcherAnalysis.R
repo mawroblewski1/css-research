@@ -12,14 +12,14 @@ library(ggplot2)  # 2D plotting
 library(rgl)      # 3D plotting (used in exploratory section at bottom)
 
 # Ensure rgl opens actual windows rather than null device
-options(rgl.useNULL = FALSE)
+options(rgl.printRglwidget = TRUE)
 
 # =============================================================================
 # SECTION 1: DATA LOADING AND FILTERING
 # =============================================================================
 
 # Load the stitched output (predictor metrics + ground truth reproducibility)
-all_data <- read.csv("dataFiles/reprstitcherOutputFeb8.csv")
+all_data <- read.csv("reprstitcherOutputFeb8.csv")
 cat("Total rows (all build pairs):", nrow(all_data), "\n")
 
 # Keep only the one sampled build pair per repository
@@ -349,6 +349,115 @@ model_log_total_deps_trimmed <- fit_and_plot(
                        "(leftmost point excluded, n=", sum(keep_log_total), ")")
 )
 
+# --- 3.8 Log of total file count in the repository ---
+# Predictor: total number of files in the repository, a general proxy for
+# project size independent of Maven structure.
+# Transformation: log (to reduce right skew)
+# Polynomial degree: 4
+
+model_log_num_files <- fit_and_plot(
+  x_vals  = log(maven_data$num_files),
+  y_vals  = maven_data$gt_repr,
+  degree  = 4,
+  x_label = "Log of total file count in repository",
+  title_label = "Quartic quasibinomial GLM: Log total file count"
+)
+
+# --- 3.9 Log of unique named dependency count (project-wide) ---
+# Predictor: number of distinct dependencies by name (groupId/artifactId),
+# deduplicating across all POM files in the project. Contrasts with
+# deps_proj_total (which counts duplicates) to isolate the effect of
+# the number of distinct external dependencies rather than total declarations.
+# Transformation: log (to reduce right skew)
+# Polynomial degree: 4
+
+model_log_proj_unique <- fit_and_plot(
+  x_vals  = log(maven_data$proj_unique),
+  y_vals  = maven_data$gt_repr,
+  degree  = 4,
+  x_label = "Log of unique named dependency count (project-wide)",
+  title_label = "Quartic quasibinomial GLM: Log unique dependency count"
+)
+
+# --- 3.10 Dependency redundancy ratio (proj_unique / deps_proj_total) ---
+# Predictor: ratio of unique named dependencies to total dependency declarations.
+# A ratio near 1 means few duplicates across modules (each dependency declared
+# roughly once); a ratio near 0 means heavy duplication across submodules.
+# Transformation: none (already a ratio in [0, 1])
+# Polynomial degree: 4
+# Trimmed companions: exclude extremes at 0 and 1
+
+model_redundancy_ratio <- fit_and_plot(
+  x_vals  = maven_data$proj_unique / maven_data$deps_proj_total,
+  y_vals  = maven_data$gt_repr,
+  degree  = 4,
+  x_label = "Dependency redundancy ratio (unique / total declarations)",
+  title_label = "Quartic quasibinomial GLM: Dependency redundancy ratio"
+)
+
+model_redundancy_ratio_trimmed <- fit_and_plot_trimmed(
+  x_vals  = maven_data$proj_unique / maven_data$deps_proj_total,
+  y_vals  = maven_data$gt_repr,
+  degree  = 4,
+  x_label = "Dependency redundancy ratio (unique / total declarations)",
+  title_label = "Quartic quasibinomial GLM: Dependency redundancy ratio"
+)
+
+# --- 3.11 Versioning rate among unique dependencies (proj_vers / proj_unique) ---
+# Predictor: proportion of uniquely named dependencies that are explicitly
+# versioned somewhere in the project. Strips out the effect of multi-module
+# duplication present in PRVRATE (proj_vers / deps_proj_total).
+# Transformation: none (ratio in [0, 1])
+# Polynomial degree: 4
+# Trimmed companions: exclude extremes at 0 and 1
+
+model_unique_versioning_rate <- fit_and_plot(
+  x_vals  = maven_data$proj_vers / maven_data$proj_unique,
+  y_vals  = maven_data$gt_repr,
+  degree  = 4,
+  x_label = "Versioning rate among unique dependencies (versioned / unique)",
+  title_label = "Quartic quasibinomial GLM: Unique dependency versioning rate"
+)
+
+model_unique_versioning_rate_trimmed <- fit_and_plot_trimmed(
+  x_vals  = maven_data$proj_vers / maven_data$proj_unique,
+  y_vals  = maven_data$gt_repr,
+  degree  = 4,
+  x_label = "Versioning rate among unique dependencies (versioned / unique)",
+  title_label = "Quartic quasibinomial GLM: Unique dependency versioning rate"
+)
+
+# --- 3.12 POM density (num_poms / num_files) ---
+# Predictor: proportion of all files in the repository that are POM files.
+# A proxy for how Maven-centric the project structure is — a high ratio
+# suggests a heavily multi-module Maven project.
+# Transformation: none (ratio, but unlikely to hit exactly 0 or 1)
+# Polynomial degree: 4
+
+model_pom_density <- fit_and_plot(
+  x_vals  = maven_data$num_poms / maven_data$num_files,
+  y_vals  = maven_data$gt_repr,
+  degree  = 4,
+  x_label = "POM file density (POM files / total files)",
+  title_label = "Quartic quasibinomial GLM: POM file density"
+)
+
+# --- 3.13 Average dependencies per POM file (deps_proj_total / num_poms) ---
+# Predictor: mean number of dependency declarations per POM file across the
+# project. Captures dependency density at the file level rather than total
+# scale — distinguishes a project with many dependencies spread across many
+# modules from one with many dependencies concentrated in few files.
+# Transformation: log (to reduce right skew)
+# Polynomial degree: 4
+
+model_log_deps_per_pom <- fit_and_plot(
+  x_vals  = log(maven_data$deps_proj_total / maven_data$num_poms),
+  y_vals  = maven_data$gt_repr,
+  degree  = 4,
+  x_label = "Log of average dependency count per POM file",
+  title_label = "Quartic quasibinomial GLM: Log average deps per POM"
+)
+
 # =============================================================================
 # SECTION 4: EXPLORATORY 3D PLOTS
 # =============================================================================
@@ -411,6 +520,7 @@ fit_and_plot_3d <- function(x_vals, y_vals, z_vals,
 # --- 4.1 Existing plots (from original exploratory analysis) ---
 
 # Project-wide versioning rate vs. log total dependency count vs. reproducibility
+open3d()
 plot3d(
   maven_data$proj_vers / maven_data$deps_proj_total,
   log(maven_data$deps_proj_total),
@@ -418,9 +528,11 @@ plot3d(
   xlab = "Versioning rate", ylab = "Log total deps", zlab = "Reproducibility",
   col = "blue", size = 5
 )
+rglwidget()
 
 # Same plot, color-coded by whether parent POM was found
 # (blue = parent POM found, red = parent POM missing)
+open3d()
 plot3d(
   maven_data$proj_vers / maven_data$deps_proj_total,
   log(maven_data$deps_proj_total),
@@ -428,8 +540,10 @@ plot3d(
   xlab = "Versioning rate", ylab = "Log total deps", zlab = "Reproducibility",
   col = ifelse(maven_data$availability == 1, "red", "blue"), size = 5
 )
+rglwidget()
 
 # Log versioned count vs. log total dependency count vs. reproducibility
+open3d()
 plot3d(
   log(maven_data$proj_vers),
   log(maven_data$deps_proj_total),
@@ -437,6 +551,7 @@ plot3d(
   xlab = "Log versioned deps", ylab = "Log total deps", zlab = "Reproducibility",
   col = "blue", size = 5
 )
+rglwidget()
 
 # --- 4.2 New plots: structural vulnerability × time × reproducibility ---
 
@@ -451,6 +566,7 @@ model_3d_prvrate_age <- fit_and_plot_3d(
   zlab   = "Reproducibility",
   title_label = "Versioning rate x Commit age x Reproducibility"
 )
+rglwidget()
 
 # Log total dependency count × commit age × reproducibility
 open3d()
@@ -463,6 +579,7 @@ model_3d_totaldeps_age <- fit_and_plot_3d(
   zlab   = "Reproducibility",
   title_label = "Log total dependency count x Commit age x Reproducibility"
 )
+rglwidget()
 
 # Log versioned dependency count × commit age × reproducibility
 open3d()
@@ -475,6 +592,39 @@ model_3d_versioned_age <- fit_and_plot_3d(
   zlab   = "Reproducibility",
   title_label = "Log versioned dependency count x Commit age x Reproducibility"
 )
+rglwidget()
+
+# Log total dependency count × versioning rate × reproducibility
+# The most natural pairing of the two main count-related findings:
+# both axes represent structural properties of the dependency configuration,
+# and together they may reveal whether the effect of versioning rate differs
+# across projects of different overall dependency scale.
+open3d()
+model_3d_totaldeps_prvrate <- fit_and_plot_3d(
+  x_vals = log(maven_data$deps_proj_total),
+  y_vals = maven_data$proj_vers / maven_data$deps_proj_total,
+  z_vals = maven_data$gt_repr,
+  xlab   = "Log total dependency count (project-wide)",
+  ylab   = "Project-wide versioning rate",
+  zlab   = "Reproducibility",
+  title_label = "Log total dependency count x Versioning rate x Reproducibility"
+)
+rglwidget()
+
+# Number of POM files × versioning rate × reproducibility
+# Tests whether multi-module project structure (many POM files) interacts
+# with versioning practice in predicting reproducibility.
+open3d()
+model_3d_numpoms_prvrate <- fit_and_plot_3d(
+  x_vals = maven_data$num_poms,
+  y_vals = maven_data$proj_vers / maven_data$deps_proj_total,
+  z_vals = maven_data$gt_repr,
+  xlab   = "Number of POM files",
+  ylab   = "Project-wide versioning rate",
+  zlab   = "Reproducibility",
+  title_label = "Number of POM files x Versioning rate x Reproducibility"
+)
+rglwidget()
 
 # =============================================================================
 # SECTION 5: POSTER/PRESENTATION VERSIONS OF KEY PLOTS
@@ -515,3 +665,4 @@ ggplot(age_df, aes(x, y)) +
   labs(x = "Time since commit was created (days)",
        y = "% of reproduction attempts matching") +
   poster_theme
+
