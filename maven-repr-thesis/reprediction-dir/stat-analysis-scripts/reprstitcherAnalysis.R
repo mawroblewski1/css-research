@@ -8,10 +8,22 @@
 #   install.packages("ggplot2")
 #   install.packages("rgl")
 
+# =============================================================================
+# ANALYSIS OPTIONS — edit these before sourcing
+# =============================================================================
+
+# Set to TRUE to overlay a loess smoother (red curve) on every 2D plot,
+# alongside the quasibinomial GLM fit (blue curve). Useful for diagnosing
+# whether the GLM curve is being driven by influential points at the edges
+# of the data. Set to FALSE for the standard GLM-only plots.
+show_loess <- FALSE
+
+# =============================================================================
+
 library(ggplot2)  # 2D plotting
 library(rgl)      # 3D plotting (used in exploratory section at bottom)
 
-# Ensure rgl opens actual windows rather than null device
+# Ensure rgl renders as widgets in the RStudio Viewer pane
 options(rgl.printRglwidget = TRUE)
 
 # =============================================================================
@@ -111,7 +123,9 @@ cat("Mean reproducibility, parent POM zero deps:", mean(parent_pom_zero_deps$gt_
 #   3. Plot the fitted curve against the raw data
 #   4. Print coefficient table with p-values
 
-# Helper function: fit, plot, and summarize a quasibinomial polynomial model
+# Helper function: fit, plot, and summarize a quasibinomial polynomial model.
+# If show_loess is TRUE (set at the top of the script), a loess smoother
+# is overlaid in red for comparison with the GLM fit in blue.
 fit_and_plot <- function(x_vals, y_vals, degree, x_label, title_label) {
   df <- data.frame(x = x_vals, y = y_vals)
   model <- glm(y ~ poly(x, degree), data = df, family = quasibinomial)
@@ -119,11 +133,17 @@ fit_and_plot <- function(x_vals, y_vals, degree, x_label, title_label) {
 
   p <- ggplot(df, aes(x, y)) +
     geom_point(alpha = 0.5) +
-    geom_line(aes(y = predicted), color = "blue", size = 1) +
+    geom_line(aes(y = predicted), color = "blue", linewidth = 1) +
     labs(title = title_label,
          x = x_label,
          y = "Predicted probability of reproducibility") +
     theme_minimal()
+
+  if (show_loess) {
+    p <- p + geom_smooth(method = "loess", color = "red", se = FALSE,
+                         linewidth = 1, linetype = "dashed")
+  }
+
   print(p)
 
   cat("\n--- Model summary:", title_label, "---\n")
@@ -649,7 +669,7 @@ versioning_rate_df <- data.frame(
 
 ggplot(versioning_rate_df, aes(x, y)) +
   geom_point(alpha = 0.5, size = 6) +
-  geom_line(aes(y = predicted), color = "blue", size = 2) +
+  geom_line(aes(y = predicted), color = "blue", linewidth = 2) +
   labs(x = "% of dependencies with versions",
        y = "% of reproduction attempts matching") +
   poster_theme
