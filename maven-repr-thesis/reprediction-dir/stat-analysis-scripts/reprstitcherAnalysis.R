@@ -649,10 +649,9 @@ rglwidget()
 # =============================================================================
 # SECTION 5: POSTER/PRESENTATION VERSIONS OF KEY PLOTS
 # =============================================================================
-# Large font sizes for use in UHP/URC poster presentation.
-# These use the same model as Section 3.1 (degree-4 versioning rate).
-# Variants are provided for: full data, extremes excluded, and (if
-# show_loess is TRUE) loess overlay versions of each.
+# The original poster plots (OPP 1 and OPP 2) are preserved untouched at the
+# end of this section (5.4 and 5.5). New variants with standard analysis
+# styling and toggleable loess are provided first (5.1, 5.2, 5.3).
 
 poster_theme <- theme_minimal() +
   theme(
@@ -662,84 +661,82 @@ poster_theme <- theme_minimal() +
     axis.text.y  = element_text(size = 28)
   )
 
-# --- 5.1 Versioning rate — poster, extremes excluded ---
-prvrate_all <- maven_data$proj_vers / maven_data$deps_proj_total
-prvrate_keep <- (prvrate_all != 0) & (prvrate_all != 1)
-
-versioning_rate_trimmed_df <- data.frame(
-  x         = prvrate_all[prvrate_keep],
-  y         = maven_data$gt_repr[prvrate_keep],
-  predicted = predict(model_versioning_rate_trimmed, type = "response")
-)
-
-p_prvrate_trimmed <- ggplot(versioning_rate_trimmed_df, aes(x, y)) +
-  geom_point(alpha = 0.5, size = 6) +
-  geom_line(aes(y = predicted), color = "blue", linewidth = 2) +
-  labs(x = "% of dependencies with versions (extremes excluded)",
-       y = "% of reproduction attempts matching") +
-  poster_theme
-print(p_prvrate_trimmed)
-
-# --- 5.2 Versioning rate — poster, full data, with loess (if show_loess) ---
+# Precompute data frames used across multiple plots below
 versioning_rate_df <- data.frame(
   x         = maven_data$proj_vers / maven_data$deps_proj_total,
   y         = maven_data$gt_repr,
   predicted = predict(model_versioning_rate, type = "response")
 )
 
-p_prvrate_full <- ggplot(versioning_rate_df, aes(x, y)) +
+prvrate_all  <- maven_data$proj_vers / maven_data$deps_proj_total
+prvrate_keep <- (prvrate_all != 0) & (prvrate_all != 1)
+versioning_rate_trimmed_df <- data.frame(
+  x         = prvrate_all[prvrate_keep],
+  y         = maven_data$gt_repr[prvrate_keep],
+  predicted = predict(model_versioning_rate_trimmed, type = "response")
+)
+
+age_df <- data.frame(
+  x = -maven_data$age,
+  y = maven_data$gt_repr
+)
+
+# --- 5.1 OPP 1 variant: PRVRATE, full data, standard styling, toggleable loess ---
+p_51 <- ggplot(versioning_rate_df, aes(x, y)) +
+  geom_point(alpha = 0.5) +
+  geom_line(aes(y = predicted), color = "blue", linewidth = 1) +
+  labs(title = "Quartic quasibinomial GLM: Project-wide versioning rate",
+       x = "Project-wide dependency versioning rate",
+       y = "Predicted probability of reproducibility") +
+  theme_minimal()
+if (show_loess) {
+  p_51 <- p_51 + geom_smooth(method = "loess", color = "red", se = FALSE,
+                              linewidth = 1, linetype = "dashed")
+}
+print(p_51)
+
+# --- 5.2 OPP 1 variant: PRVRATE, extremes excluded, standard styling, toggleable loess ---
+p_52 <- ggplot(versioning_rate_trimmed_df, aes(x, y)) +
+  geom_point(alpha = 0.5) +
+  geom_line(aes(y = predicted), color = "blue", linewidth = 1) +
+  labs(title = "Quartic quasibinomial GLM: Project-wide versioning rate (extremes excluded)",
+       x = "Project-wide dependency versioning rate",
+       y = "Predicted probability of reproducibility") +
+  theme_minimal()
+if (show_loess) {
+  p_52 <- p_52 + geom_smooth(method = "loess", color = "red", se = FALSE,
+                              linewidth = 1, linetype = "dashed")
+}
+print(p_52)
+
+# --- 5.3 OPP 2 variant: commit age, standard styling, GLM curve, toggleable loess ---
+age_df$predicted <- predict(model_age, type = "response")
+
+p_53 <- ggplot(age_df, aes(x, y)) +
+  geom_point(alpha = 0.5) +
+  geom_line(aes(y = predicted), color = "blue", linewidth = 1) +
+  labs(title = "Commit age vs. reproducibility",
+       x = "Days since failing commit was created",
+       y = "Predicted probability of reproducibility") +
+  theme_minimal()
+if (show_loess) {
+  p_53 <- p_53 + geom_smooth(method = "loess", color = "red", se = FALSE,
+                              linewidth = 1, linetype = "dashed")
+}
+print(p_53)
+
+# --- 5.4 OPP 1 original — untouched ---
+ggplot(versioning_rate_df, aes(x, y)) +
   geom_point(alpha = 0.5, size = 6) +
   geom_line(aes(y = predicted), color = "blue", linewidth = 2) +
   labs(x = "% of dependencies with versions",
        y = "% of reproduction attempts matching") +
   poster_theme
 
-if (show_loess) {
-  p_prvrate_full <- p_prvrate_full +
-    geom_smooth(method = "loess", color = "red", se = FALSE,
-                linewidth = 2, linetype = "dashed")
-}
-print(p_prvrate_full)
-
-# --- 5.3 Versioning rate — poster, extremes excluded, with loess (if show_loess) ---
-p_prvrate_trimmed_loess <- ggplot(versioning_rate_trimmed_df, aes(x, y)) +
-  geom_point(alpha = 0.5, size = 6) +
-  geom_line(aes(y = predicted), color = "blue", linewidth = 2) +
-  labs(x = "% of dependencies with versions (extremes excluded)",
-       y = "% of reproduction attempts matching") +
-  poster_theme
-
-if (show_loess) {
-  p_prvrate_trimmed_loess <- p_prvrate_trimmed_loess +
-    geom_smooth(method = "loess", color = "red", se = FALSE,
-                linewidth = 2, linetype = "dashed")
-}
-print(p_prvrate_trimmed_loess)
-
-# --- 5.4 Commit age — poster, scatter only (existing, unchanged) ---
-age_df <- data.frame(
-  x = -maven_data$age,
-  y = maven_data$gt_repr
-)
-
-p_age <- ggplot(age_df, aes(x, y)) +
+# --- 5.5 OPP 2 original — untouched ---
+ggplot(age_df, aes(x, y)) +
   geom_point(alpha = 0.5, size = 6) +
   labs(x = "Time since commit was created (days)",
        y = "% of reproduction attempts matching") +
   poster_theme
-print(p_age)
-
-# --- 5.5 Commit age — poster, with loess (if show_loess) ---
-p_age_loess <- ggplot(age_df, aes(x, y)) +
-  geom_point(alpha = 0.5, size = 6) +
-  labs(x = "Time since commit was created (days)",
-       y = "% of reproduction attempts matching") +
-  poster_theme
-
-if (show_loess) {
-  p_age_loess <- p_age_loess +
-    geom_smooth(method = "loess", color = "red", se = FALSE,
-                linewidth = 2, linetype = "dashed")
-}
-print(p_age_loess)
 
