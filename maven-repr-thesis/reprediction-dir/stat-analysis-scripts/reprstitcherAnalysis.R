@@ -16,7 +16,7 @@
 # alongside the quasibinomial GLM fit (blue curve). Useful for diagnosing
 # whether the GLM curve is being driven by influential points at the edges
 # of the data. Set to FALSE for the standard GLM-only plots.
-show_loess <- FALSE
+show_loess <- TRUE
 
 # =============================================================================
 
