@@ -16,7 +16,7 @@
 # alongside the quasibinomial GLM fit (blue curve). Useful for diagnosing
 # whether the GLM curve is being driven by influential points at the edges
 # of the data. Set to FALSE for the standard GLM-only plots.
-show_loess <- TRUE
+show_loess <- FALSE
 
 # =============================================================================
 
@@ -477,6 +477,122 @@ model_log_deps_per_pom <- fit_and_plot(
   x_label = "Log of average dependency count per POM file",
   title_label = "Quartic quasibinomial GLM: Log average deps per POM"
 )
+
+# =============================================================================
+# SECTION 3 SUMMARY: ALL MODEL SUMMARIES AND MINIMUM P-VALUES
+# =============================================================================
+# Prints every model summary in one block, and extracts the minimum p-value
+# among non-intercept coefficients for each model.
+# This section is designed to be robust to source() truncation — all key
+# numbers appear together at the end of Section 3 regardless of earlier output.
+
+# Helper: extract minimum non-intercept p-value from a glm summary
+min_pval <- function(model) {
+  coef_table <- summary(model)$coefficients
+  # Exclude intercept (row 1), extract p-values (column 4)
+  pvals <- coef_table[-1, 4]
+  return(min(pvals))
+}
+
+# List of all 2D models with descriptive labels
+model_list <- list(
+  list(label = "3.1  PRVRATE, degree-4 (full data)",
+       model = model_versioning_rate),
+  list(label = "3.1T PRVRATE, degree-4 (extremes excluded)",
+       model = model_versioning_rate_trimmed),
+  list(label = "3.1b PRVRATE, degree-6 (full data)",
+       model = model_versioning_rate_deg6),
+  list(label = "3.1bT PRVRATE, degree-6 (extremes excluded)",
+       model = model_versioning_rate_deg6_trimmed),
+  list(label = "3.2  Log versioned dependency count (full data)",
+       model = model_log_versioned_count),
+  list(label = "3.2T Log versioned dependency count (leftmost excluded)",
+       model = model_log_versioned_count_trimmed),
+  list(label = "3.3  Commit age",
+       model = model_age),
+  list(label = "3.4  Log POM file count",
+       model = model_log_pom_count),
+  list(label = "3.5  Parent POM versioning rate (full data)",
+       model = model_parent_versioning_rate),
+  list(label = "3.5T Parent POM versioning rate (extremes excluded)",
+       model = model_parent_versioning_rate_trimmed),
+  list(label = "3.6  Parent POM versioned count (sqrt)",
+       model = model_parent_versioned_count),
+  list(label = "3.7  Log total dependency count (full data)",
+       model = model_log_total_deps),
+  list(label = "3.7T Log total dependency count (leftmost excluded)",
+       model = model_log_total_deps_trimmed),
+  list(label = "3.8  Log total file count",
+       model = model_log_num_files),
+  list(label = "3.9  Log unique dependency count",
+       model = model_log_proj_unique),
+  list(label = "3.10  Dependency redundancy ratio (full data)",
+       model = model_redundancy_ratio),
+  list(label = "3.10T Dependency redundancy ratio (extremes excluded)",
+       model = model_redundancy_ratio_trimmed),
+  list(label = "3.11  Unique dependency versioning rate (full data)",
+       model = model_unique_versioning_rate),
+  list(label = "3.11T Unique dependency versioning rate (extremes excluded)",
+       model = model_unique_versioning_rate_trimmed),
+  list(label = "3.12  POM file density",
+       model = model_pom_density),
+  list(label = "3.13  Log average deps per POM file",
+       model = model_log_deps_per_pom)
+)
+
+cat("\n")
+cat("=============================================================================\n")
+cat("SECTION 3 SUMMARY: MINIMUM NON-INTERCEPT P-VALUE PER MODEL\n")
+cat("=============================================================================\n")
+cat(sprintf("%-55s %s\n", "Model", "Min p-value (non-intercept)"))
+cat(strrep("-", 75), "\n")
+for (m in model_list) {
+  pval <- tryCatch(min_pval(m$model), error = function(e) NA)
+  cat(sprintf("%-55s %.4f\n", m$label, pval))
+}
+cat(strrep("=", 75), "\n")
+
+cat("\n")
+cat("=============================================================================\n")
+cat("SECTION 3 SUMMARY: FULL MODEL SUMMARIES\n")
+cat("=============================================================================\n")
+for (m in model_list) {
+  cat("\n---", m$label, "---\n")
+  print(summary(m$model))
+}
+
+cat("\n")
+cat("=============================================================================\n")
+cat("SECTION 4 SUMMARY: 3D MODEL SUMMARIES AND MINIMUM P-VALUES\n")
+cat("=============================================================================\n")
+
+model_list_3d <- list(
+  list(label = "4.2a PRVRATE x Commit age",
+       model = model_3d_prvrate_age),
+  list(label = "4.2b Log total dependency count x Commit age",
+       model = model_3d_totaldeps_age),
+  list(label = "4.2c Log versioned dependency count x Commit age",
+       model = model_3d_versioned_age),
+  list(label = "4.2d Log total dependency count x PRVRATE",
+       model = model_3d_totaldeps_prvrate),
+  list(label = "4.2e Number of POM files x PRVRATE",
+       model = model_3d_numpoms_prvrate)
+)
+
+cat(sprintf("%-55s %s\n", "Model", "Min p-value (non-intercept)"))
+cat(strrep("-", 75), "\n")
+for (m in model_list_3d) {
+  pval <- tryCatch(min_pval(m$model), error = function(e) NA)
+  cat(sprintf("%-55s %.4f\n", m$label, pval))
+}
+cat(strrep("=", 75), "\n")
+
+cat("\n")
+cat("Full 3D model summaries:\n")
+for (m in model_list_3d) {
+  cat("\n---", m$label, "---\n")
+  print(summary(m$model))
+}
 
 # =============================================================================
 # SECTION 4: EXPLORATORY 3D PLOTS
