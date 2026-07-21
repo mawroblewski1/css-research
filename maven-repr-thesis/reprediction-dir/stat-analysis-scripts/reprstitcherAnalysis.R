@@ -561,39 +561,6 @@ for (m in model_list) {
   print(summary(m$model))
 }
 
-cat("\n")
-cat("=============================================================================\n")
-cat("SECTION 4 SUMMARY: 3D MODEL SUMMARIES AND MINIMUM P-VALUES\n")
-cat("=============================================================================\n")
-
-model_list_3d <- list(
-  list(label = "4.2a PRVRATE x Commit age",
-       model = model_3d_prvrate_age),
-  list(label = "4.2b Log total dependency count x Commit age",
-       model = model_3d_totaldeps_age),
-  list(label = "4.2c Log versioned dependency count x Commit age",
-       model = model_3d_versioned_age),
-  list(label = "4.2d Log total dependency count x PRVRATE",
-       model = model_3d_totaldeps_prvrate),
-  list(label = "4.2e Number of POM files x PRVRATE",
-       model = model_3d_numpoms_prvrate)
-)
-
-cat(sprintf("%-55s %s\n", "Model", "Min p-value (non-intercept)"))
-cat(strrep("-", 75), "\n")
-for (m in model_list_3d) {
-  pval <- tryCatch(min_pval(m$model), error = function(e) NA)
-  cat(sprintf("%-55s %.4f\n", m$label, pval))
-}
-cat(strrep("=", 75), "\n")
-
-cat("\n")
-cat("Full 3D model summaries:\n")
-for (m in model_list_3d) {
-  cat("\n---", m$label, "---\n")
-  print(summary(m$model))
-}
-
 # =============================================================================
 # SECTION 4: EXPLORATORY 3D PLOTS
 # =============================================================================
@@ -617,40 +584,36 @@ for (m in model_list_3d) {
 # terms and their interaction. With n=50 this is statistically fragile;
 # treat the surfaces as illustrative rather than confirmatory.
 
-# Helper: fit and render a 3D scatter + fitted surface
-# Note: call open3d() BEFORE calling this function to ensure the window
-# is created at the top level, which is more reliable across platforms.
-fit_and_plot_3d <- function(x_vals, y_vals, z_vals,
-                             xlab, ylab, zlab, title_label) {
-
-  cat("\n--- 3D plot:", title_label, "---\n")
-
+# Helper: fit a 3D quasibinomial GLM (model fitting only, no plotting)
+# This is called first so model objects always exist even if rgl plotting fails.
+fit_3d <- function(x_vals, y_vals, z_vals, title_label) {
+  cat("\n--- 3D model fit:", title_label, "---\n")
   df3d <- data.frame(x = x_vals, y = y_vals, z = z_vals)
-
-  # Fit a 2D quasibinomial GLM with polynomial terms and interaction
   model_3d <- glm(z ~ poly(x, 2) * poly(y, 2), data = df3d, family = quasibinomial)
-  cat("Model summary:\n")
   print(summary(model_3d))
-
-  # Scatter of raw data points (into already-open rgl window)
-  plot3d(x_vals, y_vals, z_vals,
-         xlab = xlab, ylab = ylab, zlab = zlab,
-         col = "black", size = 5, alpha = 0.7)
-  title3d(main = title_label, cex = 0.9)
-
-  # Generate a grid over the x-y plane and predict the surface
-  x_grid <- seq(min(x_vals), max(x_vals), length.out = 40)
-  y_grid <- seq(min(y_vals), max(y_vals), length.out = 40)
-  grid_df <- expand.grid(x = x_grid, y = y_grid)
-  grid_df$z_pred <- predict(model_3d, newdata = grid_df, type = "response")
-
-  z_matrix <- matrix(grid_df$z_pred, nrow = 40, ncol = 40)
-
-  # Render the fitted surface in semi-transparent blue
-  surface3d(x_grid, y_grid, z_matrix,
-            col = "blue", alpha = 0.4, back = "lines")
-
   return(model_3d)
+}
+
+# Helper: render a 3D scatter + fitted surface for an already-fitted model.
+# Call open3d() before calling this function.
+plot_3d <- function(model_3d, x_vals, y_vals, z_vals,
+                    xlab, ylab, zlab, title_label) {
+  tryCatch({
+    plot3d(x_vals, y_vals, z_vals,
+           xlab = xlab, ylab = ylab, zlab = zlab,
+           col = "black", size = 5, alpha = 0.7)
+    title3d(main = title_label, cex = 0.9)
+
+    x_grid <- seq(min(x_vals), max(x_vals), length.out = 40)
+    y_grid <- seq(min(y_vals), max(y_vals), length.out = 40)
+    grid_df <- expand.grid(x = x_grid, y = y_grid)
+    grid_df$z_pred <- predict(model_3d, newdata = grid_df, type = "response")
+    z_matrix <- matrix(grid_df$z_pred, nrow = 40, ncol = 40)
+    surface3d(x_grid, y_grid, z_matrix, col = "blue", alpha = 0.4, back = "lines")
+    rglwidget()
+  }, error = function(e) {
+    cat("Note: rgl plotting failed for", title_label, "—", conditionMessage(e), "\n")
+  })
 }
 
 # --- 4.1 Existing plots (from original exploratory analysis) ---
@@ -690,77 +653,137 @@ plot3d(
 rglwidget()
 
 # --- 4.2 New plots: structural vulnerability × time × reproducibility ---
+# Models are fitted first (fit_3d), then plotted (plot_3d).
+# This ensures model objects exist for the summary block even if rgl fails.
 
 # Project-wide versioning rate × commit age × reproducibility
-open3d()
-model_3d_prvrate_age <- fit_and_plot_3d(
+model_3d_prvrate_age <- fit_3d(
   x_vals = maven_data$proj_vers / maven_data$deps_proj_total,
   y_vals = -maven_data$age,
   z_vals = maven_data$gt_repr,
-  xlab   = "Project-wide versioning rate",
-  ylab   = "Days since failing commit",
-  zlab   = "Reproducibility",
   title_label = "Versioning rate x Commit age x Reproducibility"
 )
-rglwidget()
+open3d()
+plot_3d(model_3d_prvrate_age,
+  x_vals = maven_data$proj_vers / maven_data$deps_proj_total,
+  y_vals = -maven_data$age,
+  z_vals = maven_data$gt_repr,
+  xlab = "Project-wide versioning rate",
+  ylab = "Days since failing commit",
+  zlab = "Reproducibility",
+  title_label = "Versioning rate x Commit age x Reproducibility"
+)
 
 # Log total dependency count × commit age × reproducibility
-open3d()
-model_3d_totaldeps_age <- fit_and_plot_3d(
+model_3d_totaldeps_age <- fit_3d(
   x_vals = log(maven_data$deps_proj_total),
   y_vals = -maven_data$age,
   z_vals = maven_data$gt_repr,
-  xlab   = "Log total dependency count (project-wide)",
-  ylab   = "Days since failing commit",
-  zlab   = "Reproducibility",
   title_label = "Log total dependency count x Commit age x Reproducibility"
 )
-rglwidget()
+open3d()
+plot_3d(model_3d_totaldeps_age,
+  x_vals = log(maven_data$deps_proj_total),
+  y_vals = -maven_data$age,
+  z_vals = maven_data$gt_repr,
+  xlab = "Log total dependency count (project-wide)",
+  ylab = "Days since failing commit",
+  zlab = "Reproducibility",
+  title_label = "Log total dependency count x Commit age x Reproducibility"
+)
 
 # Log versioned dependency count × commit age × reproducibility
-open3d()
-model_3d_versioned_age <- fit_and_plot_3d(
+model_3d_versioned_age <- fit_3d(
   x_vals = log(maven_data$proj_vers),
   y_vals = -maven_data$age,
   z_vals = maven_data$gt_repr,
-  xlab   = "Log versioned dependency count (project-wide)",
-  ylab   = "Days since failing commit",
-  zlab   = "Reproducibility",
   title_label = "Log versioned dependency count x Commit age x Reproducibility"
 )
-rglwidget()
+open3d()
+plot_3d(model_3d_versioned_age,
+  x_vals = log(maven_data$proj_vers),
+  y_vals = -maven_data$age,
+  z_vals = maven_data$gt_repr,
+  xlab = "Log versioned dependency count (project-wide)",
+  ylab = "Days since failing commit",
+  zlab = "Reproducibility",
+  title_label = "Log versioned dependency count x Commit age x Reproducibility"
+)
 
 # Log total dependency count × versioning rate × reproducibility
-# The most natural pairing of the two main count-related findings:
-# both axes represent structural properties of the dependency configuration,
-# and together they may reveal whether the effect of versioning rate differs
-# across projects of different overall dependency scale.
-open3d()
-model_3d_totaldeps_prvrate <- fit_and_plot_3d(
+model_3d_totaldeps_prvrate <- fit_3d(
   x_vals = log(maven_data$deps_proj_total),
   y_vals = maven_data$proj_vers / maven_data$deps_proj_total,
   z_vals = maven_data$gt_repr,
-  xlab   = "Log total dependency count (project-wide)",
-  ylab   = "Project-wide versioning rate",
-  zlab   = "Reproducibility",
   title_label = "Log total dependency count x Versioning rate x Reproducibility"
 )
-rglwidget()
+open3d()
+plot_3d(model_3d_totaldeps_prvrate,
+  x_vals = log(maven_data$deps_proj_total),
+  y_vals = maven_data$proj_vers / maven_data$deps_proj_total,
+  z_vals = maven_data$gt_repr,
+  xlab = "Log total dependency count (project-wide)",
+  ylab = "Project-wide versioning rate",
+  zlab = "Reproducibility",
+  title_label = "Log total dependency count x Versioning rate x Reproducibility"
+)
 
 # Number of POM files × versioning rate × reproducibility
-# Tests whether multi-module project structure (many POM files) interacts
-# with versioning practice in predicting reproducibility.
-open3d()
-model_3d_numpoms_prvrate <- fit_and_plot_3d(
+model_3d_numpoms_prvrate <- fit_3d(
   x_vals = maven_data$num_poms,
   y_vals = maven_data$proj_vers / maven_data$deps_proj_total,
   z_vals = maven_data$gt_repr,
-  xlab   = "Number of POM files",
-  ylab   = "Project-wide versioning rate",
-  zlab   = "Reproducibility",
   title_label = "Number of POM files x Versioning rate x Reproducibility"
 )
-rglwidget()
+open3d()
+plot_3d(model_3d_numpoms_prvrate,
+  x_vals = maven_data$num_poms,
+  y_vals = maven_data$proj_vers / maven_data$deps_proj_total,
+  z_vals = maven_data$gt_repr,
+  xlab = "Number of POM files",
+  ylab = "Project-wide versioning rate",
+  zlab = "Reproducibility",
+  title_label = "Number of POM files x Versioning rate x Reproducibility"
+)
+
+# =============================================================================
+# SECTION 4 SUMMARY: 3D MODEL SUMMARIES AND MINIMUM P-VALUES
+# =============================================================================
+# Placed here so all 3D model objects are guaranteed to exist.
+
+model_list_3d <- list(
+  list(label = "4.2a PRVRATE x Commit age",
+       model = model_3d_prvrate_age),
+  list(label = "4.2b Log total dependency count x Commit age",
+       model = model_3d_totaldeps_age),
+  list(label = "4.2c Log versioned dependency count x Commit age",
+       model = model_3d_versioned_age),
+  list(label = "4.2d Log total dependency count x PRVRATE",
+       model = model_3d_totaldeps_prvrate),
+  list(label = "4.2e Number of POM files x PRVRATE",
+       model = model_3d_numpoms_prvrate)
+)
+
+cat("\n")
+cat("=============================================================================\n")
+cat("SECTION 4 SUMMARY: 3D MODEL MINIMUM P-VALUES\n")
+cat("=============================================================================\n")
+cat(sprintf("%-55s %s\n", "Model", "Min p-value (non-intercept)"))
+cat(strrep("-", 75), "\n")
+for (m in model_list_3d) {
+  pval <- tryCatch(min_pval(m$model), error = function(e) NA)
+  cat(sprintf("%-55s %.4f\n", m$label, pval))
+}
+cat(strrep("=", 75), "\n")
+
+cat("\n")
+cat("=============================================================================\n")
+cat("SECTION 4 SUMMARY: FULL 3D MODEL SUMMARIES\n")
+cat("=============================================================================\n")
+for (m in model_list_3d) {
+  cat("\n---", m$label, "---\n")
+  print(summary(m$model))
+}
 
 # =============================================================================
 # SECTION 5: POSTER/PRESENTATION VERSIONS OF KEY PLOTS
